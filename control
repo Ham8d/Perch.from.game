@@ -1,0 +1,8 @@
+Package: com.yourname.freeiap
+Name: FreeIAP
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: In-App Purchase bypass dylib
+Maintainer: yourname
+Author: yourname
+Section: Tweaks
