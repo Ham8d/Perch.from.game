@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = FreeIAP
 FreeIAP_FILES = Tweak.xm
-FreeIAP_CFLAGS = -fobjc-arc
+FreeIAP_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 FreeIAP_FRAMEWORKS = StoreKit Foundation
 
 include $(THEOS_MAKE_PATH)/tweak.mk
