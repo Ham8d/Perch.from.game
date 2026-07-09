@@ -22,44 +22,23 @@ workflows:
           echo "THEOS=$THEOS" >> $CM_ENV
           echo "export THEOS=$THEOS" >> $CM_ENV
 
-      - name: Diagnose repo structure
-        script: |
-          set -e
-          echo "=========================================="
-          echo "📁 Current directory: $(pwd)"
-          echo "=========================================="
-          echo "📋 All files in repo:"
-          ls -la
-          echo "=========================================="
-          echo "🔍 Searching for Tweak files anywhere:"
-          find . -iname "tweak*" -not -path "*/\.*" 2>/dev/null || echo "❌ No Tweak files found!"
-          echo "=========================================="
-          echo "🔍 Searching for Makefile:"
-          find . -iname "makefile" -not -path "*/\.*" 2>/dev/null
-          echo "=========================================="
-          echo "📄 Makefile contents:"
-          cat Makefile || echo "❌ Makefile not in root!"
-          echo "=========================================="
-
       - name: Build dylib
         script: |
           set -e
           export THEOS=$HOME/theos
           export PATH="/opt/homebrew/opt/make/libexec/gnubin:$THEOS/bin:$PATH"
           
-          # لو Tweak.xm موجود بدل Tweak.m، أعد تسميته تلقائياً
           if [ -f "Tweak.xm" ] && [ ! -f "Tweak.m" ]; then
             echo "⚠️  Found Tweak.xm, renaming to Tweak.m"
             mv Tweak.xm Tweak.m
           fi
           
-          # لو Tweak.x موجود، أعد تسميته أيضاً
           if [ -f "Tweak.x" ] && [ ! -f "Tweak.m" ]; then
             echo "⚠️  Found Tweak.x, renaming to Tweak.m"
             mv Tweak.x Tweak.m
           fi
           
-          echo "✅ Files ready for build:"
+          echo "✅ Files ready:"
           ls -la Tweak.m Makefile
           
           make clean
@@ -69,17 +48,54 @@ workflows:
         script: |
           set -e
           mkdir -p output
-          find .theos -name "FreeIAP.dylib" -exec cp {} output/ \;
           
-          if [ ! -f "output/FreeIAP.dylib" ]; then
-            echo "❌ FreeIAP.dylib not found!"
-            find .theos -type f -name "*.dylib" 2>/dev/null
+          echo "=========================================="
+          echo "🔍 All .dylib files found in .theos:"
+          echo "=========================================="
+          find .theos -name "*.dylib" -type f | while read f; do
+            echo "📄 $f"
+            file "$f"
+            echo "---"
+          done
+          echo "=========================================="
+          
+          # نبحث عن الـ dylib الصحيح (Mach-O binary)
+          FOUND_DYLIB=""
+          while IFS= read -r dylib; do
+            if file "$dylib" | grep -q "Mach-O"; then
+              echo "✅ Valid Mach-O dylib found: $dylib"
+              FOUND_DYLIB="$dylib"
+              break
+            else
+              echo "⏭️  Skipping (not Mach-O): $dylib"
+            fi
+          done < <(find .theos -name "FreeIAP.dylib" -type f)
+          
+          if [ -z "$FOUND_DYLIB" ]; then
+            echo "❌ No valid Mach-O FreeIAP.dylib found!"
+            echo "Searching for any Mach-O dylib in .theos:"
+            find .theos -name "*.dylib" -type f -exec file {} \;
+            exit 1
+          fi
+          
+          cp "$FOUND_DYLIB" output/FreeIAP.dylib
+          
+          echo "=========================================="
+          echo "📋 File info before signing:"
+          file output/FreeIAP.dylib
+          echo "=========================================="
+          
+          # فحص إنها Mach-O قبل ldid
+          if ! file output/FreeIAP.dylib | grep -q "Mach-O"; then
+            echo "❌ Output file is not a Mach-O binary!"
             exit 1
           fi
           
           ldid -S output/FreeIAP.dylib
+          
           echo "✅ Build successful:"
           ls -la output/
+          file output/FreeIAP.dylib
 
     artifacts:
       - output/FreeIAP.dylib
