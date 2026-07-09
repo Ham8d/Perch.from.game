@@ -1,54 +1,42 @@
 workflows:
-  build-dylib:
+  build-freeiap:
     name: Build FreeIAP dylib
     max_build_duration: 30
-    instance_type: mac_mini_m1
     environment:
-      vars:
-        THEOS: /Users/builder/theos
+      xcode: latest
     scripts:
-      - name: Install dependencies (ldid + make)
+      - name: Install dependencies
         script: |
           set -e
-          # تثبيت ldid عبر Homebrew
           brew install ldid make
-          # تأكيد إن ldid صار موجود في الـ PATH
-          which ldid
-          ldid -v || true
+          echo 'export PATH="/opt/homebrew/opt/make/libexec/gnubin:$PATH"' >> $CM_ENV
 
-      - name: Install Theos
+      - name: Setup Theos
         script: |
           set -e
+          export THEOS=$HOME/theos
           git clone --recursive https://github.com/theos/theos.git $THEOS
+          curl -LO https://github.com/theos/sdks/archive/master.zip
+          unzip -q master.zip
+          mv sdks-master/*.sdk $THEOS/sdks/
+          echo "THEOS=$THEOS" >> $CM_ENV
+          echo "export THEOS=$THEOS" >> $CM_ENV
 
-      - name: Install iOS SDK
+      - name: Build dylib
         script: |
           set -e
-          cd $THEOS/sdks
-          curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xzf -
-          mv sdks-master/*.sdk .
-          rm -rf sdks-master
-
-      - name: Build tweak
-        script: |
-          set -e
-          export THEOS=$THEOS
-          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          export THEOS=$HOME/theos
+          export PATH="/opt/homebrew/opt/make/libexec/gnubin:$THEOS/bin:$PATH"
           make clean
           make
-          make package FINALPACKAGE=1
 
-      - name: Extract artifacts
+      - name: Collect artifacts
         script: |
           set -e
           mkdir -p output
-          # نسخ الـ dylib (arm64 + arm64e merged)
-          cp .theos/obj/FreeIAP.dylib output/ 2>/dev/null || \
-          cp .theos/obj/debug/FreeIAP.dylib output/ 2>/dev/null || true
-          # نسخ الـ deb لو انبنى
-          cp packages/*.deb output/ 2>/dev/null || true
-          ls -lah output/
+          find .theos -name "FreeIAP.dylib" -exec cp {} output/ \;
+          ldid -S output/FreeIAP.dylib
+          ls -la output/
 
     artifacts:
-      - output/*.dylib
-      - output/*.deb
+      - output/FreeIAP.dylib
