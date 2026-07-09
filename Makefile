@@ -1,12 +1,13 @@
-TARGET := iphone:clang:latest:14.0
+TARGET := iphone:clang:latest:12.0
 ARCHS  := arm64 arm64e
-INSTALL_TARGET_PROCESSES = SpringBoard
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = FreeIAP
-FreeIAP_FILES = Tweak.xm
-FreeIAP_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
-FreeIAP_FRAMEWORKS = StoreKit Foundation
+LIBRARY_NAME = FreeIAP
 
-include $(THEOS_MAKE_PATH)/tweak.mk
+FreeIAP_FILES = Tweak.x
+FreeIAP_CFLAGS = -fobjc-arc
+FreeIAP_FRAMEWORKS = StoreKit Foundation UIKit
+FreeIAP_LDFLAGS = -Wl,-segalign,4000
+
+include $(THEOS_MAKE_PATH)/library.mk
