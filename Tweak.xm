@@ -1,21 +1,34 @@
 #import <StoreKit/StoreKit.h>
 #import <objc/runtime.h>
 
-// ====== تزييف المعاملة (Transaction) ======
+// ====== كلاس المعاملة المزيفة ======
 @interface FakeTransaction : SKPaymentTransaction
-@property (nonatomic, strong) SKPayment *fakePayment;
-@property (nonatomic, strong) NSString *fakeIdentifier;
-@property (nonatomic, strong) NSDate *fakeDate;
 @end
 
-@implementation FakeTransaction
-- (SKPayment *)payment { return self.fakePayment; }
-- (NSString *)transactionIdentifier { return self.fakeIdentifier; }
-- (NSDate *)transactionDate { return self.fakeDate; }
+@implementation FakeTransaction {
+    SKPayment *_fakePayment;
+    NSString  *_fakeIdentifier;
+    NSDate    *_fakeDate;
+}
+
+- (instancetype)initWithPayment:(SKPayment *)payment {
+    self = [super init];
+    if (self) {
+        _fakePayment    = payment;
+        _fakeIdentifier = [[NSUUID UUID] UUIDString];
+        _fakeDate       = [NSDate date];
+    }
+    return self;
+}
+
+- (SKPayment *)payment { return _fakePayment; }
+- (NSString *)transactionIdentifier { return _fakeIdentifier; }
+- (NSDate *)transactionDate { return _fakeDate; }
 - (SKPaymentTransactionState)transactionState { return SKPaymentTransactionStatePurchased; }
-- (NSArray<SKPaymentTransaction *> *)downloads { return @[]; }
+- (NSArray *)downloads { return @[]; }
 - (SKPaymentTransaction *)originalTransaction { return nil; }
 - (NSError *)error { return nil; }
+
 @end
 
 // ====== هوك SKPaymentQueue ======
@@ -23,39 +36,35 @@
 
 - (void)addPayment:(SKPayment *)payment {
     NSArray *observers = [self valueForKey:@"observers"];
-    if (!observers.count) { %orig; return; }
+    if (observers == nil || observers.count == 0) {
+        %orig;
+        return;
+    }
 
-    FakeTransaction *tx = [[FakeTransaction alloc] init];
-    tx.fakePayment    = payment;
-    tx.fakeIdentifier = [[NSUUID UUID] UUIDString];
-    tx.fakeDate       = [NSDate date];
+    FakeTransaction *tx = [[FakeTransaction alloc] initWithPayment:payment];
+    NSArray *txArray = @[tx];
 
-    for (id<SKPaymentTransactionObserver> obs in observers) {
+    for (id obs in observers) {
         if ([obs respondsToSelector:@selector(paymentQueue:updatedTransactions:)]) {
-            [obs paymentQueue:self updatedTransactions:@[tx]];
+            [obs paymentQueue:self updatedTransactions:txArray];
         }
     }
 }
 
 - (void)finishTransaction:(SKPaymentTransaction *)transaction {
-    if ([transaction isKindOfClass:[FakeTransaction class]]) return;
+    if ([transaction isKindOfClass:[FakeTransaction class]]) {
+        return;
+    }
     %orig;
 }
 
 - (void)restoreCompletedTransactions {
     NSArray *observers = [self valueForKey:@"observers"];
-    for (id<SKPaymentTransactionObserver> obs in observers) {
+    for (id obs in observers) {
         if ([obs respondsToSelector:@selector(paymentQueueRestoreCompletedTransactionsFinished:)]) {
             [obs paymentQueueRestoreCompletedTransactionsFinished:self];
         }
     }
 }
 
-%end
-
-// ====== هوك التحقق من المنتج (اختياري لكن مفيد) ======
-%hook SKProductsRequest
-- (void)start {
-    %orig;
-}
 %end
