@@ -7,14 +7,23 @@ workflows:
       vars:
         THEOS: /Users/builder/theos
     scripts:
+      - name: Install dependencies (ldid + make)
+        script: |
+          set -e
+          # تثبيت ldid عبر Homebrew
+          brew install ldid make
+          # تأكيد إن ldid صار موجود في الـ PATH
+          which ldid
+          ldid -v || true
+
       - name: Install Theos
         script: |
           set -e
           git clone --recursive https://github.com/theos/theos.git $THEOS
-          curl -LO https://github.com/sbingner/llvm-project/releases/download/v10.0.0-1/linux-ios-arm64e-clang-toolchain.tar.lzma || true
 
       - name: Install iOS SDK
         script: |
+          set -e
           cd $THEOS/sdks
           curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xzf -
           mv sdks-master/*.sdk .
@@ -22,17 +31,23 @@ workflows:
 
       - name: Build tweak
         script: |
+          set -e
           export THEOS=$THEOS
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
           make clean
           make
           make package FINALPACKAGE=1
 
-      - name: Extract dylib
+      - name: Extract artifacts
         script: |
+          set -e
           mkdir -p output
-          cp .theos/obj/debug/FreeIAP.dylib output/ 2>/dev/null || \
-          cp .theos/obj/FreeIAP.dylib output/
+          # نسخ الـ dylib (arm64 + arm64e merged)
+          cp .theos/obj/FreeIAP.dylib output/ 2>/dev/null || \
+          cp .theos/obj/debug/FreeIAP.dylib output/ 2>/dev/null || true
+          # نسخ الـ deb لو انبنى
           cp packages/*.deb output/ 2>/dev/null || true
+          ls -lah output/
 
     artifacts:
       - output/*.dylib
