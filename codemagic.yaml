@@ -22,11 +22,46 @@ workflows:
           echo "THEOS=$THEOS" >> $CM_ENV
           echo "export THEOS=$THEOS" >> $CM_ENV
 
+      - name: Diagnose repo structure
+        script: |
+          set -e
+          echo "=========================================="
+          echo "📁 Current directory: $(pwd)"
+          echo "=========================================="
+          echo "📋 All files in repo:"
+          ls -la
+          echo "=========================================="
+          echo "🔍 Searching for Tweak files anywhere:"
+          find . -iname "tweak*" -not -path "*/\.*" 2>/dev/null || echo "❌ No Tweak files found!"
+          echo "=========================================="
+          echo "🔍 Searching for Makefile:"
+          find . -iname "makefile" -not -path "*/\.*" 2>/dev/null
+          echo "=========================================="
+          echo "📄 Makefile contents:"
+          cat Makefile || echo "❌ Makefile not in root!"
+          echo "=========================================="
+
       - name: Build dylib
         script: |
           set -e
           export THEOS=$HOME/theos
           export PATH="/opt/homebrew/opt/make/libexec/gnubin:$THEOS/bin:$PATH"
+          
+          # لو Tweak.xm موجود بدل Tweak.m، أعد تسميته تلقائياً
+          if [ -f "Tweak.xm" ] && [ ! -f "Tweak.m" ]; then
+            echo "⚠️  Found Tweak.xm, renaming to Tweak.m"
+            mv Tweak.xm Tweak.m
+          fi
+          
+          # لو Tweak.x موجود، أعد تسميته أيضاً
+          if [ -f "Tweak.x" ] && [ ! -f "Tweak.m" ]; then
+            echo "⚠️  Found Tweak.x, renaming to Tweak.m"
+            mv Tweak.x Tweak.m
+          fi
+          
+          echo "✅ Files ready for build:"
+          ls -la Tweak.m Makefile
+          
           make clean
           make
 
@@ -35,7 +70,15 @@ workflows:
           set -e
           mkdir -p output
           find .theos -name "FreeIAP.dylib" -exec cp {} output/ \;
+          
+          if [ ! -f "output/FreeIAP.dylib" ]; then
+            echo "❌ FreeIAP.dylib not found!"
+            find .theos -type f -name "*.dylib" 2>/dev/null
+            exit 1
+          fi
+          
           ldid -S output/FreeIAP.dylib
+          echo "✅ Build successful:"
           ls -la output/
 
     artifacts:
